@@ -7,7 +7,7 @@ This project runs a subset of MIPS assembly directly from `.asm` files (labels s
 ```bash
 make
 
-## Run
+## Run (run make command first)
 ./mipsim program.asm
 -------------------------------------------------------------------------
 
