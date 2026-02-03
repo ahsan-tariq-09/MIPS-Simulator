@@ -139,32 +139,38 @@ Program parse_asm_file(const char* path) {
   Label labels[MAX_LABELS];
   size_t nlabels = 0;
 
-  // PASS 1: collect labels, count instructions
-  uint32_t pc = 0;
-  size_t inst_count = 0;
+// PASS 1: collect labels, count instructions
+uint32_t pc = 0;
+size_t inst_count = 0;
 
-  for (size_t i = 0; i < line_count; i++) {
-    strip_comment(lines[i]);
-    char* s = trim(lines[i]);
-    if (*s == '\0') continue;
+for (size_t i = 0; i < line_count; i++) {
+  char tmp[512];
+  strncpy(tmp, lines[i], sizeof(tmp) - 1);
+  tmp[sizeof(tmp) - 1] = '\0';
 
-    // ignore directives like .text .data for now
-    if (s[0] == '.') continue;
+  strip_comment(tmp);
+  char* s = trim(tmp);
+  if (*s == '\0') continue;
 
-    // handle label: "loop:"
-    char* colon = strchr(s, ':');
-    if (colon) {
-      *colon = '\0';
-      char* lname = trim(s);
-      if (*lname) label_add(labels, &nlabels, lname, pc);
-      s = trim(colon + 1);
-      if (*s == '\0') continue; // label-only line
-    }
+  // ignore directives like .text .data for now
+  if (s[0] == '.') continue;
 
-    // At this point, we have an instruction line
-    inst_count++;
-    pc += 4;
+  // handle label: "loop:"
+  char* colon = strchr(s, ':');
+  if (colon) {
+    *colon = '\0';
+    char* lname = trim(s);
+    if (*lname) label_add(labels, &nlabels, lname, pc);
+
+    s = trim(colon + 1);
+    if (*s == '\0') continue; // label-only line
   }
+
+  // At this point, we have an instruction line
+  inst_count++;
+  pc += 4;
+}
+
 
   Instr* program = (Instr*)calloc(inst_count, sizeof(Instr));
   if (!program) { fprintf(stderr, "[parser] OOM\n"); exit(1); }
