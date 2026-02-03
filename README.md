@@ -2,13 +2,14 @@
 
 This project runs a subset of MIPS assembly directly from `.asm` files (labels supported).
 
-## Build
+## Build & Run
 
 ```bash
 make
 
 ## Run
 ./mipsim program.asm
+-------------------------------------------------------------------------
 
 ##  With direct-mapped cache stats (data accesses only: lw/sw)
 ./mipsim program.asm --cache 64 16
