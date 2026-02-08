@@ -6,6 +6,9 @@
 
 #define MAX_LINES  65536
 #define MAX_LABELS 4096
+#define MAX_DATA_INITS 4096
+#define DATA_BASE 0x1000
+
 
 static uint32_t label_lookup(Label* labels, size_t n, const char* name, int* ok) {
   for (size_t i = 0; i < n; i++) {
@@ -43,6 +46,10 @@ static Op op_from_mnemonic(const char* m) {
 
   if (!strcmp(m, "mul")) return OP_MUL;
   if (!strcmp(m, "div")) return OP_DIV;
+  if (!strcmp(m, "mult")) return OP_MULT;
+  if (!strcmp(m, "mflo")) return OP_MFLO;
+  if (!strcmp(m, "addu")) return OP_ADDU;
+  if (!strcmp(m, "la")) return OP_LA;
 
   if (!strcmp(m, "addi")) return OP_ADDI;
   if (!strcmp(m, "andi")) return OP_ANDI;
@@ -142,9 +149,18 @@ Program parse_asm_file(const char* path) {
   Label labels[MAX_LABELS];
   size_t nlabels = 0;
 
-  // PASS 1: collect labels, count instructions
+  typedef enum { SEG_TEXT, SEG_DATA } Segment;
+  Segment seg = SEG_TEXT;
+
+  // PASS 1: collect labels, count instructions, collect data initializers
   uint32_t pc = 0;
+  uint32_t data_addr = DATA_BASE;
+
   size_t inst_count = 0;
+
+  DataInit data[MAX_DATA_INITS];
+  size_t data_count = 0;
+
 
   for (size_t i = 0; i < line_count; i++) {
     char tmp[512];
@@ -155,8 +171,16 @@ Program parse_asm_file(const char* path) {
     char* s = trim(tmp);
     if (*s == '\0') continue;
 
-    // ignore directives like .text .data for now
-    if (s[0] == '.') continue;
+    // Segment/directive handling
+    // Default segment is TEXT (matches typical input that starts with .text)
+    // We'll track segment explicitly.
+         if (s[0] == '.') {
+      if (strncmp(s, ".text", 5) == 0) { seg = SEG_TEXT; continue; }
+      if (strncmp(s, ".data", 5) == 0) { seg = SEG_DATA; continue; }
+      if (strncmp(s, ".globl", 6) == 0) { continue; }
+      // Unknown directive: ignore for now
+      continue;
+    }
 
     // handle label: "loop:"
     char* colon = strchr(s, ':');
@@ -169,7 +193,30 @@ Program parse_asm_file(const char* path) {
       if (*s == '\0') continue; // label-only line
     }
 
-    // At this point, we have an instruction line
+     if (seg == SEG_DATA) {
+      // Expect .asciiz in data segment
+      if (strncmp(s, ".asciiz", 7) != 0) {
+        fprintf(stderr, "[parser] unsupported data directive: %s\n", s);
+        exit(1);
+      }
+      if (data_count >= MAX_DATA_INITS) {
+        fprintf(stderr, "[parser] too many data initializers\n");
+        exit(1);
+      }
+
+      size_t blen = 0;
+      uint8_t* b = parse_asciiz_bytes(s, &blen);
+
+      data[data_count].addr = data_addr;
+      data[data_count].bytes = b;
+      data[data_count].len = blen;
+      data_count++;
+
+      data_addr += (uint32_t)blen;
+      continue;
+    }
+
+    // TEXT segment: this is an instruction line
     inst_count++;
     pc += 4;
   }
@@ -189,7 +236,17 @@ Program parse_asm_file(const char* path) {
     strip_comment(lines[i]);
     char* s = trim(lines[i]);
     if (*s == '\0') continue;
-    if (s[0] == '.') continue;
+
+    // Skip data segment content in pass 2 (already handled in pass 1)
+    if (seg == SEG_DATA) continue;
+
+
+    if (s[0] == '.') {
+      if (strncmp(s, ".text", 5) == 0) { seg = SEG_TEXT; continue; }
+      if (strncmp(s, ".data", 5) == 0) { seg = SEG_DATA; continue; }
+      if (strncmp(s, ".globl", 6) == 0) { continue; }
+      continue; // ignore other directives
+    }
 
     char* colon = strchr(s, ':');
     if (colon) {
@@ -311,4 +368,50 @@ void free_program(Program* p) {
   free(p->program);
   p->program = NULL;
   p->count = 0;
+}
+
+static uint8_t* parse_asciiz_bytes(const char* s, size_t* out_len) {
+  // Expect s like: .asciiz "...\n..."
+  // Returns allocated bytes including trailing '\0'
+  const char* q1 = strchr(s, '"');
+  if (!q1) {
+    fprintf(stderr, "[parser] .asciiz missing opening quote: %s\n", s);
+    exit(1);
+  }
+  const char* q2 = strrchr(q1 + 1, '"');
+  if (!q2 || q2 <= q1) {
+    fprintf(stderr, "[parser] .asciiz missing closing quote: %s\n", s);
+    exit(1);
+  }
+
+  // Worst-case: every char becomes one byte + null
+  size_t cap = (size_t)(q2 - (q1 + 1)) + 1;
+  uint8_t* bytes = (uint8_t*)malloc(cap + 1);
+  if (!bytes) { fprintf(stderr, "[parser] OOM\n"); exit(1); }
+
+  size_t n = 0;
+  for (const char* p = q1 + 1; p < q2; p++) {
+    if (*p == '\\') {
+      p++;
+      if (p >= q2) break;
+      switch (*p) {
+        case 'n': bytes[n++] = (uint8_t)'\n'; break;
+        case 't': bytes[n++] = (uint8_t)'\t'; break;
+        case 'r': bytes[n++] = (uint8_t)'\r'; break;
+        case '\\': bytes[n++] = (uint8_t)'\\'; break;
+        case '"': bytes[n++] = (uint8_t)'"'; break;
+        case '0': bytes[n++] = (uint8_t)'\0'; break; // rare, but allow
+        default:
+          // Unknown escape: keep literal
+          bytes[n++] = (uint8_t)(*p);
+          break;
+      }
+    } else {
+      bytes[n++] = (uint8_t)(*p);
+    }
+  }
+
+  bytes[n++] = 0; // null terminator
+  *out_len = n;
+  return bytes;
 }

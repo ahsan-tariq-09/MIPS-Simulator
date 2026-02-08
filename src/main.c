@@ -39,6 +39,14 @@ int main(int argc, char** argv) {
 
   Cache cache = cache_create(lines, block, cache_on);
 
+    // Load .data initializers (e.g., .asciiz) into memory before running
+  for (size_t i = 0; i < p.data_count; i++) {
+    for (size_t j = 0; j < p.data[i].len; j++) {
+      mem_store_byte(&mem, p.data[i].addr + (uint32_t)j, p.data[i].bytes[j]);
+    }
+  }
+
+
   run_program(&cpu, p.program, p.count, &mem, &cache);
 
   cache_print_stats(&cache);
