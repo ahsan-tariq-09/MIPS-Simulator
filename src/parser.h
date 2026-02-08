@@ -18,7 +18,7 @@ typedef struct {
   size_t data_count;
 } Program;
 
-Program parse_file(const char* path);
+Program parse_asm_file(const char* path);
 void free_program(Program* p);
 
 #endif
