@@ -9,6 +9,12 @@
 #define MAX_DATA_INITS 4096
 #define DATA_BASE 0x1000
 
+typedef struct {
+  char name[64];
+  uint32_t pc;
+} Label;
+
+static uint8_t* parse_asciiz_bytes(const char* s, size_t* out_len);
 
 static uint32_t label_lookup(Label* labels, size_t n, const char* name, int* ok) {
   for (size_t i = 0; i < n; i++) {
@@ -187,7 +193,10 @@ Program parse_asm_file(const char* path) {
     if (colon) {
       *colon = '\0';
       char* lname = trim(s);
-      if (*lname) label_add(labels, &nlabels, lname, pc);
+      if (*lname) {
+        uint32_t label_addr = (seg == SEG_DATA) ? data_addr : pc;
+        label_add(labels, &nlabels, lname, label_addr);
+      }
 
       s = trim(colon + 1);
       if (*s == '\0') continue; // label-only line
@@ -227,6 +236,7 @@ Program parse_asm_file(const char* path) {
   // PASS 2: parse instructions and resolve label targets
   pc = 0;
   size_t idx = 0;
+  seg = SEG_TEXT;
 
   for (size_t i = 0; i < line_count; i++) {
     char original[512];
@@ -237,16 +247,15 @@ Program parse_asm_file(const char* path) {
     char* s = trim(lines[i]);
     if (*s == '\0') continue;
 
-    // Skip data segment content in pass 2 (already handled in pass 1)
-    if (seg == SEG_DATA) continue;
-
-
     if (s[0] == '.') {
       if (strncmp(s, ".text", 5) == 0) { seg = SEG_TEXT; continue; }
       if (strncmp(s, ".data", 5) == 0) { seg = SEG_DATA; continue; }
       if (strncmp(s, ".globl", 6) == 0) { continue; }
       continue; // ignore other directives
     }
+
+    // Skip data segment content in pass 2 (already handled in pass 1)
+    if (seg == SEG_DATA) continue;
 
     char* colon = strchr(s, ':');
     if (colon) {
@@ -279,7 +288,7 @@ Program parse_asm_file(const char* path) {
 
     // Decode operands by opcode family
     switch (in.op) {
-      case OP_ADD: case OP_SUB: case OP_AND: case OP_OR: case OP_SLT:
+      case OP_ADD: case OP_ADDU: case OP_SUB: case OP_AND: case OP_OR: case OP_SLT:
       case OP_MUL: case OP_DIV:
         // add rd, rs, rt
         if (nt != 4) { fprintf(stderr, "[parser] bad R-type: %s\n", in.raw); exit(1); }
@@ -287,6 +296,30 @@ Program parse_asm_file(const char* path) {
         in.rs = reg_number(toks[2]);
         in.rt = reg_number(toks[3]);
         break;
+
+      case OP_MULT:
+        // mult rs, rt
+        if (nt != 3) { fprintf(stderr, "[parser] bad mult: %s\n", in.raw); exit(1); }
+        in.rs = reg_number(toks[1]);
+        in.rt = reg_number(toks[2]);
+        break;
+
+      case OP_MFLO:
+        // mflo rd
+        if (nt != 2) { fprintf(stderr, "[parser] bad mflo: %s\n", in.raw); exit(1); }
+        in.rd = reg_number(toks[1]);
+        break;
+
+      case OP_LA: {
+        // la rt, label
+        if (nt != 3) { fprintf(stderr, "[parser] bad la: %s\n", in.raw); exit(1); }
+        in.rt = reg_number(toks[1]);
+        int ok = 0;
+        uint32_t tpc = label_lookup(labels, nlabels, toks[2], &ok);
+        if (!ok) { fprintf(stderr, "[parser] unknown label: %s\n", toks[2]); exit(1); }
+        in.target_pc = tpc;
+        break;
+      }
 
       case OP_ADDI: case OP_ANDI: case OP_ORI:
         // addi rt, rs, imm
@@ -360,14 +393,31 @@ Program parse_asm_file(const char* path) {
   Program p;
   p.program = program;
   p.count = inst_count;
+  p.data = NULL;
+  p.data_count = data_count;
+  if (data_count > 0) {
+    p.data = (DataInit*)calloc(data_count, sizeof(DataInit));
+    if (!p.data) { fprintf(stderr, "[parser] OOM\n"); exit(1); }
+    for (size_t i = 0; i < data_count; i++) {
+      p.data[i] = data[i];
+    }
+  }
   return p;
 }
 
 void free_program(Program* p) {
   if (!p) return;
+  if (p->data) {
+    for (size_t i = 0; i < p->data_count; i++) {
+      free(p->data[i].bytes);
+    }
+  }
   free(p->program);
+  free(p->data);
   p->program = NULL;
   p->count = 0;
+  p->data = NULL;
+  p->data_count = 0;
 }
 
 static uint8_t* parse_asciiz_bytes(const char* s, size_t* out_len) {
