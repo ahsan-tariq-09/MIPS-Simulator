@@ -41,6 +41,9 @@ static Op op_from_mnemonic(const char* m) {
   if (!strcmp(m, "or"))  return OP_OR;
   if (!strcmp(m, "slt")) return OP_SLT;
 
+  if (!strcmp(m, "mul")) return OP_MUL;
+  if (!strcmp(m, "div")) return OP_DIV;
+
   if (!strcmp(m, "addi")) return OP_ADDI;
   if (!strcmp(m, "andi")) return OP_ANDI;
   if (!strcmp(m, "ori"))  return OP_ORI;
@@ -139,38 +142,37 @@ Program parse_asm_file(const char* path) {
   Label labels[MAX_LABELS];
   size_t nlabels = 0;
 
-// PASS 1: collect labels, count instructions
-uint32_t pc = 0;
-size_t inst_count = 0;
+  // PASS 1: collect labels, count instructions
+  uint32_t pc = 0;
+  size_t inst_count = 0;
 
-for (size_t i = 0; i < line_count; i++) {
-  char tmp[512];
-  strncpy(tmp, lines[i], sizeof(tmp) - 1);
-  tmp[sizeof(tmp) - 1] = '\0';
+  for (size_t i = 0; i < line_count; i++) {
+    char tmp[512];
+    strncpy(tmp, lines[i], sizeof(tmp) - 1);
+    tmp[sizeof(tmp) - 1] = '\0';
 
-  strip_comment(tmp);
-  char* s = trim(tmp);
-  if (*s == '\0') continue;
+    strip_comment(tmp);
+    char* s = trim(tmp);
+    if (*s == '\0') continue;
 
-  // ignore directives like .text .data for now
-  if (s[0] == '.') continue;
+    // ignore directives like .text .data for now
+    if (s[0] == '.') continue;
 
-  // handle label: "loop:"
-  char* colon = strchr(s, ':');
-  if (colon) {
-    *colon = '\0';
-    char* lname = trim(s);
-    if (*lname) label_add(labels, &nlabels, lname, pc);
+    // handle label: "loop:"
+    char* colon = strchr(s, ':');
+    if (colon) {
+      *colon = '\0';
+      char* lname = trim(s);
+      if (*lname) label_add(labels, &nlabels, lname, pc);
 
-    s = trim(colon + 1);
-    if (*s == '\0') continue; // label-only line
+      s = trim(colon + 1);
+      if (*s == '\0') continue; // label-only line
+    }
+
+    // At this point, we have an instruction line
+    inst_count++;
+    pc += 4;
   }
-
-  // At this point, we have an instruction line
-  inst_count++;
-  pc += 4;
-}
-
 
   Instr* program = (Instr*)calloc(inst_count, sizeof(Instr));
   if (!program) { fprintf(stderr, "[parser] OOM\n"); exit(1); }
@@ -205,11 +207,11 @@ for (size_t i = 0; i < line_count; i++) {
     strncpy(in.raw, trim(original), sizeof(in.raw) - 1);
 
     char* toks[8];
-    char tmp[512];
-    strncpy(tmp, s, sizeof(tmp) - 1);
-    tmp[sizeof(tmp) - 1] = '\0';
+    char tmp2[512];
+    strncpy(tmp2, s, sizeof(tmp2) - 1);
+    tmp2[sizeof(tmp2) - 1] = '\0';
 
-    int nt = tokenize(tmp, toks, 8);
+    int nt = tokenize(tmp2, toks, 8);
     if (nt <= 0) continue;
 
     in.op = op_from_mnemonic(toks[0]);
@@ -221,6 +223,7 @@ for (size_t i = 0; i < line_count; i++) {
     // Decode operands by opcode family
     switch (in.op) {
       case OP_ADD: case OP_SUB: case OP_AND: case OP_OR: case OP_SLT:
+      case OP_MUL: case OP_DIV:
         // add rd, rs, rt
         if (nt != 4) { fprintf(stderr, "[parser] bad R-type: %s\n", in.raw); exit(1); }
         in.rd = reg_number(toks[1]);
