@@ -12,6 +12,7 @@
 
 typedef enum {
   OP_ADD, OP_SUB, OP_AND, OP_OR, OP_SLT,
+  OP_MUL, OP_DIV,
   OP_ADDI, OP_ANDI, OP_ORI,
   OP_LW, OP_SW,
   OP_BEQ, OP_BNE, OP_BGE, OP_BLT, OP_BGT, OP_BLE,

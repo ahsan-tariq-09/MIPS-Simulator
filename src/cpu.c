@@ -60,6 +60,21 @@ void run_program(CPUState* cpu, Instr* program, size_t count, Memory* mem, Cache
         write_reg(cpu, in.rd, (cpu->regs[in.rs] < cpu->regs[in.rt]) ? 1 : 0);
         break;
 
+      case OP_MUL:
+        // 32-bit signed multiplication. Result goes into rd. No hi/lo handling.
+        write_reg(cpu, in.rd, cpu->regs[in.rs] * cpu->regs[in.rt]);
+        break;
+
+      case OP_DIV:
+        // 32-bit signed division. Trap on divide by zero.
+        if (cpu->regs[in.rt] == 0) {
+          fprintf(stderr, "\n[cpu] division by zero at pc=%u: %s\n", cpu->pc, in.raw);
+          cpu->running = false;
+          break;
+        }
+        write_reg(cpu, in.rd, cpu->regs[in.rs] / cpu->regs[in.rt]);
+        break;
+
       case OP_ADDI:
         write_reg(cpu, in.rt, cpu->regs[in.rs] + in.imm);
         break;
