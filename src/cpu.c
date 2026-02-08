@@ -22,6 +22,11 @@ static bool branch_taken(Op op, int32_t a, int32_t b) {
 void cpu_init(CPUState* cpu) {
   cpu->pc = 0;
   for (int i = 0; i < NUM_REGS; i++) cpu->regs[i] = 0;
+
+  cpu->hi = 0;
+  cpu->lo = 0;
+
+  cpu->regs[29] = (int32_t)(MEM_SIZE - 4); // $sp = top of memory
   cpu->running = true;
 }
 
@@ -45,10 +50,10 @@ void run_program(CPUState* cpu, Instr* program, size_t count, Memory* mem, Cache
 
     switch (in.op) {
       case OP_ADD:
-        write_reg(cpu, in.rd, cpu->regs[in.rs] + cpu->regs[in.rt]);
+        write_reg(cpu, in.rd, (int32_t)((int64_t)cpu->regs[in.rs] + (int64_t)cpu->regs[in.rt]));
         break;
       case OP_SUB:
-        write_reg(cpu, in.rd, cpu->regs[in.rs] - cpu->regs[in.rt]);
+        write_reg(cpu, in.rd, (int32_t)((int64_t)cpu->regs[in.rs] - (int64_t)cpu->regs[in.rt]));
         break;
       case OP_AND:
         write_reg(cpu, in.rd, cpu->regs[in.rs] & cpu->regs[in.rt]);
@@ -85,7 +90,29 @@ void run_program(CPUState* cpu, Instr* program, size_t count, Memory* mem, Cache
         write_reg(cpu, in.rt, cpu->regs[in.rs] | (int32_t)(uint32_t)in.imm);
         break;
 
-      case OP_LW: {
+      case OP_ADDU: {
+        uint32_t a = (uint32_t)cpu->regs[in.rs];
+        uint32_t b = (uint32_t)cpu->regs[in.rt];
+        write_reg(cpu, in.rd, (int32_t)(a + b));
+       break;
+      }
+
+       case OP_MULT: {
+         int64_t prod = (int64_t)cpu->regs[in.rs] * (int64_t)cpu->regs[in.rt];
+         cpu->lo = (int32_t)(prod & 0xFFFFFFFF);
+         cpu->hi = (int32_t)((prod >> 32) & 0xFFFFFFFF);
+          break;
+        }    
+
+       case OP_MFLO:
+         write_reg(cpu, in.rd, cpu->lo);
+         break;
+
+       case OP_LA:
+      // la rt, label  (we store label addr in target_pc)
+          write_reg(cpu, in.rt, (int32_t)in.target_pc);
+          break;
+       case OP_LW: {
         uint32_t addr = (uint32_t)(cpu->regs[in.rs] + in.imm);
         if (cache && cache->enabled) cache_access(cache, addr);
         int32_t val;
@@ -130,7 +157,7 @@ void run_program(CPUState* cpu, Instr* program, size_t count, Memory* mem, Cache
         break;
 
       case OP_SYSCALL:
-        handle_syscall(cpu);
+        handle_syscall(cpu, mem);
         break;
 
       case OP_NOP:

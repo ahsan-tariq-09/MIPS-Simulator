@@ -11,9 +11,10 @@
 #define MEM_SIZE (1u << 20) // 1 MiB
 
 typedef enum {
-  OP_ADD, OP_SUB, OP_AND, OP_OR, OP_SLT,
-  OP_MUL, OP_DIV,
+  OP_ADD, OP_ADDU, OP_SUB, OP_AND, OP_OR, OP_SLT,
+  OP_MUL, OP_MULT, OP_MFLO, OP_DIV,
   OP_ADDI, OP_ANDI, OP_ORI,
+  OP_LA,
   OP_LW, OP_SW,
   OP_BEQ, OP_BNE, OP_BGE, OP_BLT, OP_BGT, OP_BLE,
   OP_J, OP_JAL, OP_JR,
@@ -35,6 +36,7 @@ typedef struct {
 typedef struct {
   uint32_t pc;                 // byte address
   int32_t regs[NUM_REGS];      // MIPS regs as signed 32-bit
+  int32_t hi, lo;               // HI and LO registers for mult/div
   bool running;
 } CPUState;
 

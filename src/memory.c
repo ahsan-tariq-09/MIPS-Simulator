@@ -41,3 +41,67 @@ bool mem_store_word(Memory* m, uint32_t addr, int32_t val) {
   m->bytes[addr + 3] = (uint8_t)((u >> 24) & 0xFF);
   return true;
 }
+
+static bool check_addr_byte(Memory* m, uint32_t addr) {
+  return m && m->bytes && addr < m->size;
+}
+
+bool mem_load_byte(Memory* m, uint32_t addr, uint8_t* out) {
+  if (!check_addr_byte(m, addr) || !out) return false;
+  *out = m->bytes[addr];
+  return true;
+}
+
+bool mem_store_byte(Memory* m, uint32_t addr, uint8_t val) {
+  if (!check_addr_byte(m, addr)) return false;
+  m->bytes[addr] = val;
+  return true;
+}
+
+static bool check_addr_byte(Memory* m, uint32_t addr) {
+  return m && m->bytes && addr < m->size;
+}
+
+bool mem_load_byte(Memory* m, uint32_t addr, uint8_t* out) {
+  if (!check_addr_byte(m, addr) || !out) return false;
+  *out = m->bytes[addr];
+  return true;
+}
+
+bool mem_store_byte(Memory* m, uint32_t addr, uint8_t val) {
+  if (!check_addr_byte(m, addr)) return false;
+  m->bytes[addr] = val;
+  return true;
+}
+
+static bool check_addr_byte(Memory* m, uint32_t addr) {
+  return m && m->bytes && addr < m->size;
+}
+
+bool mem_load_byte(Memory* m, uint32_t addr, uint8_t* out) {
+  if (!check_addr_byte(m, addr) || !out) return false;
+  *out = m->bytes[addr];
+  return true;
+}
+
+bool mem_store_byte(Memory* m, uint32_t addr, uint8_t val) {
+  if (!check_addr_byte(m, addr)) return false;
+  m->bytes[addr] = val;
+  return true;
+}
+
+static bool check_addr_byte(Memory* m, uint32_t addr) {
+  return m && m->bytes && addr < m->size;
+}
+
+bool mem_load_byte(Memory* m, uint32_t addr, uint8_t* out) {
+  if (!check_addr_byte(m, addr) || !out) return false;
+  *out = m->bytes[addr];
+  return true;
+}
+
+bool mem_store_byte(Memory* m, uint32_t addr, uint8_t val) {
+  if (!check_addr_byte(m, addr)) return false;
+  m->bytes[addr] = val;
+  return true;
+}

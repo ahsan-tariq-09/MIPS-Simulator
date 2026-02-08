@@ -9,6 +9,8 @@ make
 
 ## Run (run make command first)
 ./mipsim Tests/test.asm
+
+if you file has spaces put it in ""
 -------------------------------------------------------------------------
 
 ##  With direct-mapped cache stats (data accesses only: lw/sw)
